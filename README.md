@@ -8,7 +8,9 @@ agent's config.
 JSON files only. It does not crawl live registries. Live crawling is a
 later phase.
 
-**Status: v0.1 built, pre-bench.** Spec: `SPEC.md`.
+**Status: v0.1.1 — CERTIFIED (local, fixture)** (Verity re-bench,
+2026-10-26: probe 5 chain-attack suite 4/4 + strict extras 9/9, full
+prior suite 44/44; D1 closed). Spec: `SPEC.md`.
 
 ## Novel mechanism
 
