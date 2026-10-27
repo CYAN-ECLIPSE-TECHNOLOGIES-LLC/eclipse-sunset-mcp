@@ -164,6 +164,80 @@ class TestClaims(Base):
         self.assertEqual(u4["result"], "UNPROVEN")
 
 
+class TestChainInvalidGate(Base):
+    """Bench Fix D1 regression — replicates Verity bench probe 5:
+    flip one bool (convert_units.deprecated) in record 2 of the store.
+    No forged PROVEN may be minted, no old PROVEN may stand unflagged,
+    and no forged finding may be emitted silently."""
+
+    def tamper(self):
+        path = sunset.chain_path()
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+        rec = json.loads(lines[1])
+        for t in rec["snapshot"]["tools"]:
+            if t["name"] == "convert_units":
+                t["deprecated"] = True
+        lines[1] = json.dumps(rec, sort_keys=True) + "\n"
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+    def test_chain_status_still_reports_tamper(self):
+        self.ingest_fixtures()
+        self.tamper()
+        st = sunset.chain_status({})
+        self.assertFalse(st["valid"])
+        self.assertEqual(st["first_bad_position"], 2)
+
+    def test_old_proven_claim_flagged_unproven(self):  # bench 5b
+        self.ingest_fixtures()
+        ok = sunset.verify_sunset_claim(
+            {"server_id": "example.weather-server",
+             "tool_name": "legacy_lookup", "claim": "removed"})
+        self.assertEqual(ok["result"], "PROVEN")
+        self.tamper()
+        out = sunset.verify_sunset_claim(
+            {"server_id": "example.weather-server",
+             "tool_name": "legacy_lookup", "claim": "removed"})
+        self.assertEqual(out["result"], "UNPROVEN")
+        self.assertTrue(out["chain_invalid"])
+        self.assertEqual(out["first_bad_position"], 2)
+        self.assertIn("CHAIN_INVALID", out["reason"])
+
+    def test_no_forged_proven_minted(self):  # bench 5c
+        self.ingest_fixtures()
+        self.tamper()
+        out = sunset.verify_sunset_claim(
+            {"server_id": "example.weather-server",
+             "tool_name": "convert_units", "claim": "deprecated"})
+        self.assertEqual(out["result"], "UNPROVEN")
+        self.assertTrue(out["chain_invalid"])
+
+    def test_detect_sunsets_refuses_tampered_chain(self):  # bench 5d
+        self.ingest_fixtures()
+        self.tamper()
+        with self.assertRaises(sunset.ToolError) as ctx:
+            sunset.detect_sunsets(
+                {"server_id": "example.weather-server"})
+        self.assertIn("CHAIN_INVALID", str(ctx.exception))
+
+    def test_migration_diff_refuses_tampered_chain(self):
+        self.ingest_fixtures()
+        self.tamper()
+        with self.assertRaises(sunset.ToolError) as ctx:
+            sunset.migration_diff(
+                {"server_id": "example.weather-server",
+                 "tools_used": ["convert_units"]})
+        self.assertIn("CHAIN_INVALID", str(ctx.exception))
+
+    def test_ingest_refuses_to_extend_tampered_chain(self):
+        self.ingest_fixtures()
+        self.tamper()
+        with self.assertRaises(sunset.ToolError) as ctx:
+            sunset.ingest_snapshot({"snapshot": load("weather-v1.json")})
+        self.assertIn("CHAIN_INVALID", str(ctx.exception))
+
+
 class TestServerSurface(Base):
     def test_tools_list_exactly_five(self):
         resp = server.handle({"method": "tools/list", "id": 1})

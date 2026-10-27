@@ -60,3 +60,30 @@ removed, `get_alerts` deprecated, `get_forecast` schema-breaking
   absence is structural, stdlib imports are hashlib/json/os/sys only).
 - Pricing: FREE + funnel (spec §6); no price figures, payment fields,
   or checkout anywhere.
+
+---
+
+# FIX ROUND — Bench Defect D1 (v0.1.1, 2026-10-26)
+
+Verity bench verdict on v0.1.0 (fbe1c92): CONDITIONAL (local, fixture),
+41/44 — defect D1 HIGH: read/proof tools never verified the chain they
+proved from; one flipped bool in the store minted a forged PROVEN and
+forged `detect_sunsets` findings (probe 5b/5c/5d FAIL).
+
+Fix (minimal, mechanism-preserving; SPEC addendum "Bench Fix D1"):
+
+- `sunset.py`: new `_require_valid_chain` / `_load_verified_chain`
+  gate on `verify_chain_records()`. `detect_sunsets` + `migration_diff`
+  (via `_pair`) and `ingest_snapshot` refuse with `CHAIN_INVALID`
+  ToolError on a tampered ledger. `verify_sunset_claim` returns
+  `UNPROVEN` + `chain_invalid: true` + `first_bad_position` +
+  `CHAIN_INVALID` reason. `chain_status` unchanged (it is the
+  verifier). Version 0.1.0 → 0.1.1 (`TOOL_VERSION` + `server.json`).
+- Tests: +6 regression tests (`TestChainInvalidGate`) replicating the
+  bench tamper repro (bool flip in store record 2): old PROVEN →
+  flagged UNPROVEN, no forged PROVEN minted, detect/migration/ingest
+  refuse, `chain_status` still reports the tamper.
+- Verification: suite 18/18 (12 prior + 6 new). Independent stdio
+  repro of bench probe 5 against the fixed server: 5b/5c/5d +
+  migration_diff all pass (REPRO5_ALL_PASS).
+- Re-bench: Verity probe 5 only, per verdict fix condition.

@@ -13,7 +13,7 @@ import os
 
 GENESIS = "0" * 64
 PRODUCT = "eclipse-sunset"
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.1.1"
 
 
 class ToolError(Exception):
@@ -87,10 +87,27 @@ def _append(record):
         f.write(json.dumps(record, sort_keys=True) + "\n")
 
 
+def _require_valid_chain(chain):
+    """Bench Fix D1: no read/proof path may trust stored chain data
+    without verifying integrity first. Raises CHAIN_INVALID."""
+    valid, bad = verify_chain_records(chain)
+    if not valid:
+        raise ToolError(
+            "CHAIN_INVALID: witnessed chain failed integrity "
+            "verification at position %s; refusing to use tampered "
+            "ledger data" % bad)
+    return chain
+
+
+def _load_verified_chain():
+    return _require_valid_chain(load_chain())
+
+
 def ingest_snapshot(args):
     snap = args.get("snapshot")
     validate_snapshot(snap)
-    chain = load_chain()
+    # Extending a tampered chain would launder it; refuse.
+    chain = _load_verified_chain()
     prev_hash = chain[-1]["chain_hash"] if chain else GENESIS
     s_hash = snapshot_hash(snap)
     c_hash = sha256_text(prev_hash + s_hash)
@@ -165,7 +182,7 @@ def _pair(args):
     server_id = args.get("server_id")
     if not isinstance(server_id, str) or not server_id:
         raise ToolError("server_id is required")
-    chain = load_chain()
+    chain = _load_verified_chain()
     a = _resolve(chain, server_id, args.get("from_id"), True)
     b = _resolve(chain, server_id, args.get("to_id"), False)
     if a["position"] >= b["position"]:
@@ -321,11 +338,22 @@ def verify_sunset_claim(args):
     if claim not in ("deprecated", "removed"):
         raise ToolError("claim must be 'deprecated' or 'removed'")
     chain = load_chain()
-    cands = [r for r in chain
-             if r["snapshot"].get("server_id") == server_id]
     base = {"product": PRODUCT, "tool_version": TOOL_VERSION,
             "scope": "LOCAL/fixture", "server_id": server_id,
             "tool_name": tool, "claim": claim}
+    # Bench Fix D1: a claim is only ever evaluated against a verified
+    # chain. On a tampered ledger the verdict is UNPROVEN, explicitly
+    # flagged — never PROVEN from forged records.
+    valid, bad = verify_chain_records(chain)
+    if not valid:
+        return {**base, "result": "UNPROVEN", "chain_invalid": True,
+                "first_bad_position": bad,
+                "reason": "CHAIN_INVALID: witnessed chain failed "
+                          "integrity verification at position %s; "
+                          "no claim can be proven from a tampered "
+                          "ledger" % bad}
+    cands = [r for r in chain
+             if r["snapshot"].get("server_id") == server_id]
     if len(cands) < 2:
         return {**base, "result": "UNPROVEN",
                 "reason": "fewer than two witnessed snapshots for "

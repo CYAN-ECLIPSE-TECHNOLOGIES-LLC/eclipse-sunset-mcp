@@ -124,3 +124,34 @@ Python 3 stdlib only. MCP over stdio JSON-RPC (`initialize`,
 `tools/list`, `tools/call`). Core logic in `sunset.py`, transport in
 `server.py`. State dir: env `SUNSET_DATA_DIR`, else `./data`
 (gitignored). Tests: `python3 -m unittest discover -s tests`.
+
+## Addendum — Bench Fix D1 (v0.1.1, 2026-10-26)
+
+Added after Verity bench verdict CONDITIONAL (probe 5b/5c/5d FAIL,
+defect D1, HIGH). The original text above is unchanged; this addendum
+extends §3 point 2 and §4.
+
+Root cause: in v0.1.0 only `chain_status` ran chain verification;
+`verify_sunset_claim`, `detect_sunsets`, and `migration_diff` trusted
+`load_chain()` records, so a tampered ledger (one flipped bool in a
+stored snapshot) silently minted PROVEN claims and forged findings.
+
+Fix — every consumer of stored chain data now verifies integrity
+(`verify_chain_records`) before use:
+
+- `verify_sunset_claim`: on an invalid chain returns `UNPROVEN` with
+  `chain_invalid: true`, `first_bad_position`, and a `CHAIN_INVALID`
+  reason — in this tool's existing result vocabulary, never PROVEN
+  and never silently UNPROVEN.
+- `detect_sunsets` / `migration_diff`: on an invalid chain refuse
+  with a clean machine-readable error, `CHAIN_INVALID: …` (surfaced
+  as the server's standard `{"error": …}` + `isError` response); no
+  findings or diff entries are emitted from a tampered ledger.
+- `ingest_snapshot`: refuses with `CHAIN_INVALID` rather than extend
+  a tampered chain (appending would launder the break).
+- `chain_status`: unchanged — it is the verifier and reports
+  `valid: false` + `first_bad_position` as before.
+
+Regression coverage: `tests/test_sunset.py::TestChainInvalidGate`
+replicates the bench tamper repro (bool flip in store record 2 →
+5b/5c/5d behaviours, plus migration_diff and ingest gates).
