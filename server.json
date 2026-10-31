@@ -1,1 +1,12 @@
-{"$schema":"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json","description":"MCP deprecation radar: witnessed, hash-chained registry snapshots prove deprecated/removed tools.","name":"io.github.CYAN-ECLIPSE-TECHNOLOGIES-LLC/eclipse-sunset-mcp","repository":{"source":"github","url":"https://github.com/CYAN-ECLIPSE-TECHNOLOGIES-LLC/eclipse-sunset-mcp"},"title":"Eclipse Sunset","version":"0.1.1","websiteUrl":"https://eclipsebazaar.com"}
+{
+ "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+ "description": "MCP deprecation radar: witnessed, hash-chained registry snapshots prove deprecated/removed tools.",
+ "name": "io.github.CYAN-ECLIPSE-TECHNOLOGIES-LLC/eclipse-sunset-mcp",
+ "repository": {
+  "source": "github",
+  "url": "https://github.com/CYAN-ECLIPSE-TECHNOLOGIES-LLC/eclipse-sunset-mcp"
+ },
+ "title": "Cyan Eclipse Sunset",
+ "version": "0.1.2",
+ "websiteUrl": "https://eclipsebazaar.com"
+}
